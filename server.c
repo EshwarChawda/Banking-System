@@ -14,6 +14,9 @@ int main() {
     int addrlen = sizeof(address);
     char buffer[BUFFER_SIZE];
     const char *ip_address = "127.0.0.1";
+	int val;
+	char user_ID[100];
+	int pass;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -29,10 +32,6 @@ int main() {
     printf("Waiting for connections on %s:%d...\n", ip_address, PORT);
 
 	const char *firstMenu = "Enter log-in type: \n 1. Customer \n 2. Bank Employee \n 3. Manager \n 4. Administrator \n 5. Exit \n Enter your choice : ";
-
-	int val;
-	char user_ID[100];
-	int pass;
 
 	while(1) {
 		new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);

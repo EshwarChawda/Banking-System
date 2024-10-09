@@ -13,6 +13,7 @@ int main() {
     char *message = "Hello from client";
     char buffer[BUFFER_SIZE];
 	const char *ip_address = "127.0.0.1";
+	int val;
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -28,8 +29,6 @@ int main() {
 		close(sock);
 		return 0;
 	}
-
-	int val;
 
     while(1) {
 		memset(buffer, 0, sizeof(buffer));
