@@ -4,14 +4,66 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define PORT 65000
+#define PORT 65001
 #define BUFFER_SIZE 1024
+
+char buffer[BUFFER_SIZE];
+
+void FillLoginDetails(int socketfd) {
+	memset(buffer, 0, BUFFER_SIZE);
+
+	read(socketfd, buffer, BUFFER_SIZE);
+	
+	printf("%s", buffer);
+
+	memset(buffer, 0, BUFFER_SIZE);
+	
+	fgets(buffer, BUFFER_SIZE, stdin);
+
+	send(socketfd, buffer, strlen(buffer), 0);
+
+	memset(buffer, 0, BUFFER_SIZE);
+
+	read(socketfd, buffer, BUFFER_SIZE);
+	printf("%s", buffer);
+
+	memset(buffer, 0, BUFFER_SIZE);
+
+	fgets(buffer, BUFFER_SIZE, stdin);
+
+	send(socketfd, buffer, strlen(buffer), 0);
+}
+
+void GetWelcomeMenu(int socketfd) {
+	memset(buffer, 0, BUFFER_SIZE);
+
+	read(socketfd, buffer, BUFFER_SIZE);
+	printf("%s", buffer);
+
+	memset(buffer, 0, BUFFER_SIZE);
+
+	int val, response;
+	scanf("%d", &val);
+	getchar();
+
+	response = htonl(val);
+
+	send(socketfd, &response, sizeof(response), 0);
+
+	if(val >= 1 && val <= 4) {
+		FillLoginDetails(socketfd);
+	}
+	else if(val == 5) {
+		return;
+	}
+	else {
+		GetWelcomeMenu(socketfd);
+	}
+}
 
 int main() {
     int sock = 0;
     struct sockaddr_in serv_addr;
-    char *message = "Hello from client";
-    char buffer[BUFFER_SIZE];
 	const char *ip_address = "127.0.0.1";
 	int val;
 
@@ -30,19 +82,8 @@ int main() {
 		return 0;
 	}
 
-    while(1) {
-		memset(buffer, 0, sizeof(buffer));
-		read(sock, buffer, BUFFER_SIZE);
-		printf("%s", buffer);
-
-		scanf("%d", &val);
-		val = htonl(val);
-
-		send(sock, &val, sizeof(val), 0);
-		if(ntohl(val)==5)
-			break;
-
-	}
+    
+	GetWelcomeMenu(sock);
 
     close(sock);
     return 0;
