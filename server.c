@@ -6,68 +6,31 @@
 #include <signal.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <time.h>
 
-#define PORT 65001
-#define BUFFER_SIZE 1024
+#define PORT 65000
 
-char buffer[BUFFER_SIZE];
-
-void GetCredentialsFromClient(int socketfd){
-	send(socketfd, loginIdLabel, loginIdLabelLength, 0);
-
-	memset(buffer, 0, BUFFER_SIZE);
-	read(socketfd, buffer, BUFFER_SIZE);
-
-	char loginId[100];
-	char password[100];
-
-	strcpy(loginId, buffer);
-
-	send(socketfd, passwordLabel, passwordLabelLength, 0);
-
-	memset(buffer, 0, BUFFER_SIZE);
-	read(socketfd, buffer, BUFFER_SIZE);
-
-	strcpy(password, buffer);
-
-	memset(buffer, 0, BUFFER_SIZE);
-}
-
-int SendWelcomeMenu(int socketfd) {
-	// Sending the Predefined Welcome Menu to the client
-	send(socketfd, clientMenu, clientMenuLength, 0);
-
-	// Waiting for the response from the client
-	int responseValue;
-
-	read(socketfd, &responseValue, sizeof(responseValue));
-
-	responseValue = ntohl(responseValue);
-
-	// Responding to the client as per the Selected Menu Item
-	switch (responseValue)
-	{
-		case 1: GetCredentialsFromClient(socketfd);
-			break;
-		
-		case 2:
-			break;
-		
-		case 3:
-			break;
-		
-		case 4:
-			break;
-		
-		case 5: 
-			break;
-		
-		default: SendWelcomeMenu(socketfd);
-			break;
-	}
-
-	return 0;
-}
+void GetWelcomeMenuResponse(int socketfd);
+void GetCredentialsFromClient(int socketfd, Credentials *creds);
+LoginResult VerifyAdminCredentials(int socketfd, Credentials *creds);
+void GetAdminMenuResponse(int socketfd);
+void AddNewEmployee(int socketfd);
+int GetNewIndex(char * filePath);
+LoginResult VerifyEmployeeCredentialsAndRole(int socketfd, Credentials * creds, ClientType employeeType);
+void GetManagerMenuResponse(int socketfd);
+void GetEmployeeMenuResponse(int socketfd);
+void AddNewCustomer(int socketfd);
+LoginResult VerifyCustomerCredentials(int socketfd, Credentials * creds);
+void GetCustomerMenuResponse(int socketfd);
+void SendAccountBalance(int socketfd);
+void Deposit(int socketfd);
+void Withdraw(int socketfd);
+void SendTransactionsToCustomer(int socketfd);
+void TransferFunds(int socketfd);
+void LogTransaction(char * filePath, char * customerId, double amount, TransactionType type);
+void ChangePasswordForClient(int socketfd);
 
 int main() {
 	init();
@@ -97,7 +60,7 @@ int main() {
 		int processId = fork();
 
 		if(processId == 0) {
-			SendWelcomeMenu(new_socket);
+			GetWelcomeMenuResponse(new_socket);
 			close(new_socket);
 			close(server_fd);
 			exit(0);
@@ -109,3 +72,809 @@ int main() {
 
     return 0;
 }
+
+void GetWelcomeMenuResponse(int socketfd) {
+	// Waiting for the response from the client
+	int responseValue;
+
+	read(socketfd, &responseValue, sizeof(responseValue));
+
+	responseValue = ntohl(responseValue);
+
+	if(responseValue == 5)
+		return;
+
+	Credentials creds;
+	GetCredentialsFromClient(socketfd, &creds);
+
+	// Responding to the client as per the Selected Menu Item
+	switch (responseValue)
+	{
+		case 1: 
+			LoginResult result = VerifyCustomerCredentials(socketfd, &creds);
+
+			if(result != LOGIN_SUCCESSFUL) {
+				GetWelcomeMenuResponse(socketfd);
+			}
+			else {
+				GetCustomerMenuResponse(socketfd);
+			}
+
+			break;
+		
+		case 2: 
+		{
+			LoginResult result = VerifyEmployeeCredentialsAndRole(socketfd, &creds, EMPLOYEE);
+
+			if(result != LOGIN_SUCCESSFUL) {
+				GetWelcomeMenuResponse(socketfd);
+			}
+			else {
+				GetEmployeeMenuResponse(socketfd);
+			}
+		}
+		break;
+		
+		case 3: 
+		{
+			LoginResult result = VerifyEmployeeCredentialsAndRole(socketfd, &creds, MANAGER);
+
+			if(result != LOGIN_SUCCESSFUL) {
+				GetWelcomeMenuResponse(socketfd);
+			}
+			else {
+				GetManagerMenuResponse(socketfd);
+			}
+		}
+		break;
+		
+		case 4: 
+		{
+			LoginResult result = VerifyAdminCredentials(socketfd, &creds);
+
+			if(result != LOGIN_SUCCESSFUL) {
+				GetWelcomeMenuResponse(socketfd);
+			}
+			else {
+				GetAdminMenuResponse(socketfd);
+			}
+		}
+		break;
+		
+		default: GetWelcomeMenuResponse(socketfd);
+			break;
+	}
+}
+
+void GetCredentialsFromClient(int socketfd, Credentials *creds) {
+	read(socketfd, creds, sizeof(Credentials));
+}
+
+LoginResult VerifyAdminCredentials(int socketfd, Credentials *creds) {
+	Credentials actualCredentials;
+
+	int fd = open(adminCredentialsFilePath, O_RDONLY);
+
+	read(fd, &actualCredentials, sizeof(actualCredentials));
+
+	close(fd);
+
+	LoginResult result = LOGIN_ID_NOT_FOUND;
+
+	if(strcmp(creds->loginId, actualCredentials.loginId) == 0) {
+		if(strcmp(creds->password, actualCredentials.password) == 0) {
+			result = LOGIN_SUCCESSFUL;
+		}
+		else {
+			result = PASSWORD_MISMATCH;
+		}
+	}
+
+	send(socketfd, &result, sizeof(result), 0);
+
+	return result; 
+}
+
+void GetAdminMenuResponse(int socketfd) {
+	// Waiting for the response from the client
+	int responseValue;
+
+	read(socketfd, &responseValue, sizeof(responseValue));
+
+	responseValue = ntohl(responseValue);
+
+	switch(responseValue) {
+		case 1: 
+			AddNewEmployee(socketfd);
+			GetAdminMenuResponse(socketfd);
+			break;
+		
+		case 2:
+			break;
+		
+		case 4:
+			ChangePasswordForClient(socketfd);
+			GetAdminMenuResponse(socketfd);
+			break;
+		
+		default:
+			GetWelcomeMenuResponse(socketfd);
+			break;
+	}
+}
+
+void AddNewEmployee(int socketfd) {
+	EmployeeInformation employee;
+
+	read(socketfd, &employee, sizeof(EmployeeInformation));
+
+	int currentIndexValue = GetNewIndex(employeeIndexesFilePath);
+	
+	char currentEmployeeId[14] = "emp-";
+	char buffer[10];
+
+	snprintf(buffer, sizeof(buffer), "%d", currentIndexValue);
+
+	strcat(currentEmployeeId, buffer);
+
+	strcpy(employee.userid, currentEmployeeId);
+
+	char currEmployeeDirectoryPath[230];
+
+	strcpy(currEmployeeDirectoryPath, employeesDirectoryPath);
+	strcat(currEmployeeDirectoryPath, "/");
+	strcat(currEmployeeDirectoryPath, currentEmployeeId);
+
+	mkdir(currEmployeeDirectoryPath, 0755);
+
+	char currEmployeeDetailsFilePath[237];
+	char currEmployeeAssignedLoansFilePath[235];
+
+	strcpy(currEmployeeDetailsFilePath, currEmployeeDirectoryPath);
+	strcpy(currEmployeeAssignedLoansFilePath, currEmployeeDirectoryPath);
+
+	strcat(currEmployeeDetailsFilePath, "/details");
+	strcat(currEmployeeAssignedLoansFilePath, "/loans");
+
+	int fd1 = open(currEmployeeDetailsFilePath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+	int fd2 = creat(currEmployeeAssignedLoansFilePath, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd1);
+
+	write(fd1, &employee, sizeof(EmployeeInformation));
+
+	UnLockFile(fd1);
+
+	close(fd2);
+	close(fd1);
+
+	send(socketfd, employee.userid, 14, 0);
+}
+
+int GetNewIndex(char * filePath) {
+	int fd = open(filePath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd);
+
+	int currentIndexValue;
+
+	read(fd, &currentIndexValue, sizeof(currentIndexValue));
+
+	int result = currentIndexValue;
+
+	currentIndexValue = currentIndexValue + 1;
+
+	lseek(fd, 0, SEEK_SET);
+
+	write(fd, &currentIndexValue, sizeof(currentIndexValue));
+
+	UnLockFile(fd);
+
+	close(fd);
+
+	return result;
+}
+
+LoginResult VerifyEmployeeCredentialsAndRole(int socketfd, Credentials * creds, ClientType employeeType) {
+	char currEmployeeDirectoryPath[230];
+
+	strcpy(currEmployeeDirectoryPath, employeesDirectoryPath);
+	strcat(currEmployeeDirectoryPath, "/");
+	strcat(currEmployeeDirectoryPath, creds->loginId);
+
+	LoginResult result;
+	
+	if(access(currEmployeeDirectoryPath, F_OK) == -1) {
+		result = LOGIN_ID_NOT_FOUND;
+
+		send(socketfd, &result, sizeof(result), 0);
+
+		return result;
+	}
+
+	EmployeeInformation employee;
+
+	char currEmployeeDetailsFilePath[237];
+
+	strcpy(currEmployeeDetailsFilePath, currEmployeeDirectoryPath);
+	strcat(currEmployeeDetailsFilePath, "/details");
+
+	int fd = open(currEmployeeDetailsFilePath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+	AcquireReadLock(fd);
+
+	read(fd, &employee, sizeof(EmployeeInformation));
+
+	UnLockFile(fd);
+
+	close(fd);
+
+	if(strcmp(creds->password, employee.password) != 0) {
+		result = PASSWORD_MISMATCH;
+	}
+	else if(employee.employeetype != employeeType) {
+		result = ROLE_MISMATCH;
+	}
+	else {
+		result = LOGIN_SUCCESSFUL;
+	}
+
+	send(socketfd, &result, sizeof(result), 0);
+
+	return result;
+}
+
+void GetManagerMenuResponse(int socketfd) {
+	// Waiting for the response from the client
+	int responseValue;
+
+	read(socketfd, &responseValue, sizeof(responseValue));
+
+	responseValue = ntohl(responseValue);
+
+	switch(responseValue) {
+		case 1: 
+			break;
+		
+		case 2:
+			break;
+		
+		case 5:
+			ChangePasswordForClient(socketfd);
+			break;
+		
+		default: 
+			GetWelcomeMenuResponse(socketfd);
+			break;
+	}
+}
+
+void GetEmployeeMenuResponse(int socketfd) {
+	// Waiting for the response from the client
+	int responseValue;
+
+	read(socketfd, &responseValue, sizeof(responseValue));
+
+	responseValue = ntohl(responseValue);
+
+	switch(responseValue) {
+		case 1: 
+			AddNewCustomer(socketfd);
+			GetEmployeeMenuResponse(socketfd);
+			break;
+		
+		case 2:
+			break;
+		
+		case 5:
+			ChangePasswordForClient(socketfd);
+			GetEmployeeMenuResponse(socketfd);
+			break;
+		
+		default: 
+			GetWelcomeMenuResponse(socketfd);
+			break;
+	}
+}
+
+void AddNewCustomer(int socketfd) {
+	CustomerInformation customer;
+
+	read(socketfd, &customer, sizeof(CustomerInformation));
+
+	int currentIndexValue = GetNewIndex(customerIndexesFilePath);
+	
+	char currentCustomerId[14] = "cus-";
+	char buffer[10];
+
+	snprintf(buffer, sizeof(buffer), "%d", currentIndexValue);
+
+	strcat(currentCustomerId, buffer);
+
+	strcpy(customer.userid, currentCustomerId);
+
+	char currCustomerDirectoryPath[230];
+
+	strcpy(currCustomerDirectoryPath, customersDirectoryPath);
+	strcat(currCustomerDirectoryPath, "/");
+	strcat(currCustomerDirectoryPath, currentCustomerId);
+
+	mkdir(currCustomerDirectoryPath, 0755);
+
+	char currCustomerDetailsFilePath[237];
+	char currCustomerRequestedLoansFilePath[235];
+	char currCustomerTransactionsFilePath[243];
+
+	strcpy(currCustomerDetailsFilePath, currCustomerDirectoryPath);
+	strcpy(currCustomerRequestedLoansFilePath, currCustomerDirectoryPath);
+	strcpy(currCustomerTransactionsFilePath, currCustomerDirectoryPath);
+
+	strcat(currCustomerDetailsFilePath, "/details");
+	strcat(currCustomerRequestedLoansFilePath, "/loans");
+	strcat(currCustomerTransactionsFilePath, "/transactions");
+
+	int fd1 = open(currCustomerDetailsFilePath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+	int fd2 = creat(currCustomerRequestedLoansFilePath, S_IRUSR | S_IWUSR);
+	int fd3 = creat(currCustomerTransactionsFilePath, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd1);
+
+	write(fd1, &customer, sizeof(CustomerInformation));
+
+	UnLockFile(fd1);
+
+	close(fd3);
+	close(fd2);
+	close(fd1);
+
+	send(socketfd, customer.userid, strlen(customer.userid), 0);
+}
+
+LoginResult VerifyCustomerCredentials(int socketfd, Credentials * creds) {
+	char currCustomerDirectoryPath[230];
+
+	strcpy(currCustomerDirectoryPath, customersDirectoryPath);
+	strcat(currCustomerDirectoryPath, "/");
+	strcat(currCustomerDirectoryPath, creds->loginId);
+
+	LoginResult result;
+	
+	if(access(currCustomerDirectoryPath, F_OK) == -1) {
+		result = LOGIN_ID_NOT_FOUND;
+
+		send(socketfd, &result, sizeof(result), 0);
+
+		return result;
+	}
+
+	CustomerInformation customer;
+
+	char currCustomerDetailsFilePath[237];
+
+	strcpy(currCustomerDetailsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerDetailsFilePath, "/details");
+
+	int fd = open(currCustomerDetailsFilePath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+	AcquireReadLock(fd);
+
+	read(fd, &customer, sizeof(CustomerInformation));
+
+	UnLockFile(fd);
+
+	close(fd);
+
+	if(strcmp(creds->password, customer.password) != 0) {
+		result = PASSWORD_MISMATCH;
+	}
+	else {
+		result = LOGIN_SUCCESSFUL;
+	}
+
+	send(socketfd, &result, sizeof(result), 0);
+
+	return result;
+}
+
+void GetCustomerMenuResponse(int socketfd) {
+	int responseValue;
+
+	read(socketfd, &responseValue, sizeof(responseValue));
+
+	responseValue = ntohl(responseValue);
+
+	switch(responseValue) {
+		case 1: 
+			SendAccountBalance(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+		
+		case 2:
+			Deposit(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+		
+		case 3:
+			Withdraw(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+		
+		case 4:
+			TransferFunds(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+		
+		case 5:
+			ChangePasswordForClient(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+
+		case 7:
+			SendTransactionsToCustomer(socketfd);
+			GetCustomerMenuResponse(socketfd);
+			break;
+		
+		default: 
+			GetWelcomeMenuResponse(socketfd);
+			break;
+	}
+}
+
+void SendAccountBalance(int socketfd) {
+	char currCustomerDetailsFilePath[237];
+	char currentCustomerId[14];
+	CustomerInformation customer;
+
+	read(socketfd, currentCustomerId, 14);
+
+	strcpy(currCustomerDetailsFilePath, customersDirectoryPath);
+	strcat(currCustomerDetailsFilePath, "/");
+	strcat(currCustomerDetailsFilePath, currentCustomerId);
+	strcat(currCustomerDetailsFilePath, "/details");
+
+	int fd = open(currCustomerDetailsFilePath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+	AcquireReadLock(fd);
+
+	read(fd, &customer, sizeof(CustomerInformation));
+
+	UnLockFile(fd);
+
+	close(fd);
+
+	send(socketfd, &customer.balance, sizeof(double), 0);
+}
+
+void Deposit(int socketfd) {
+	char currentCustomerId[14];
+	char currCustomerDirectoryPath[230];
+	char currCustomerDetailsFilePath[237];
+	char currCustomerTransationsFilePath[243];
+	CustomerInformation customer;
+	double depositAmount;
+
+	read(socketfd, currentCustomerId, 14);
+
+	strcpy(currCustomerDirectoryPath, customersDirectoryPath);
+	strcat(currCustomerDirectoryPath, "/");
+	strcat(currCustomerDirectoryPath, currentCustomerId);
+
+	strcpy(currCustomerDetailsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerDetailsFilePath, "/details");
+
+	strcpy(currCustomerTransationsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerTransationsFilePath, "/transactions");
+
+	read(socketfd, &depositAmount, sizeof(depositAmount));
+
+	int fd1 = open(currCustomerDetailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd1);
+
+	read(fd1, &customer, sizeof(CustomerInformation));
+
+	customer.balance += depositAmount;
+
+	lseek(fd1, 0, SEEK_SET);
+
+	write(fd1, &customer, sizeof(CustomerInformation));
+	UnLockFile(fd1);
+	close(fd1);
+
+	LogTransaction(currCustomerTransationsFilePath, currentCustomerId, depositAmount, CREDIT);
+
+	send(socketfd, &customer.balance, sizeof(double), 0);	
+}
+
+void Withdraw(int socketfd) {
+	char currentCustomerId[14];
+	char currCustomerDirectoryPath[230];
+	char currCustomerDetailsFilePath[237];
+	char currCustomerTransationsFilePath[243];
+	CustomerInformation customer;
+	double withdrawAmount;
+
+	read(socketfd, currentCustomerId, 14);
+
+	strcpy(currCustomerDirectoryPath, customersDirectoryPath);
+	strcat(currCustomerDirectoryPath, "/");
+	strcat(currCustomerDirectoryPath, currentCustomerId);
+
+	strcpy(currCustomerDetailsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerDetailsFilePath, "/details");
+
+	strcpy(currCustomerTransationsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerTransationsFilePath, "/transactions");
+
+	read(socketfd, &withdrawAmount, sizeof(withdrawAmount));
+
+	int fd1 = open(currCustomerDetailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd1);
+
+	read(fd1, &customer, sizeof(CustomerInformation));
+
+	send(socketfd, &customer.balance, sizeof(double), 0);
+
+	if(customer.balance < withdrawAmount) {
+		UnLockFile(fd1);
+		close(fd1);
+		return;
+	}
+
+	customer.balance -= withdrawAmount;
+
+	lseek(fd1, 0, SEEK_SET);
+
+	write(fd1, &customer, sizeof(CustomerInformation));
+
+	UnLockFile(fd1);
+	close(fd1);
+
+	LogTransaction(currCustomerTransationsFilePath, currentCustomerId, withdrawAmount, DEBIT);
+
+	send(socketfd, &customer.balance, sizeof(customer.balance), 0);
+}
+
+void SendTransactionsToCustomer(int socketfd) {
+	char currentCustomerId[14];
+	char currCustomerTransationsFilePath[243];
+
+	read(socketfd, currentCustomerId, 14);
+
+	strcpy(currCustomerTransationsFilePath, customersDirectoryPath);
+	strcat(currCustomerTransationsFilePath, "/");
+	strcat(currCustomerTransationsFilePath, currentCustomerId);
+	strcat(currCustomerTransationsFilePath, "/transactions");
+
+	int fd = open(currCustomerTransationsFilePath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+	AcquireReadLock(fd);
+
+	int filesize = lseek(fd, 0, SEEK_END);
+	int totalTransactions = filesize/sizeof(Transaction);
+
+	lseek(fd, 0, SEEK_SET);
+
+	send(socketfd, &totalTransactions, sizeof(totalTransactions), 0);
+
+	for(int i = 0; i < totalTransactions; i++) {
+		Transaction transaction;
+		read(fd, &transaction, sizeof(Transaction));
+		send(socketfd, &transaction, sizeof(Transaction), 0);
+	}
+
+	UnLockFile(fd);
+	close(fd);
+}
+
+void TransferFunds(int socketfd) {
+	char currentCustomerId[14];
+	char currCustomerDirectoryPath[230];
+	char currCustomerDetailsFilePath[237];
+	char currCustomerTransationsFilePath[243];
+	char payeeCustomerId[14];
+	char payeeCustomerDirectoryPath[230];
+	char payeeCustomerDetailsFilePath[243];
+	char payeeCustomerTransactionsFilePath[243];
+	CustomerInformation customer;
+	CustomerInformation payee;
+	double transferAmount;
+	EnityExistenceResult result;
+
+	read(socketfd, currentCustomerId, 14);
+
+	read(socketfd, payeeCustomerId, 14);
+
+	strcpy(payeeCustomerDirectoryPath, customersDirectoryPath);
+	strcat(payeeCustomerDirectoryPath, "/");
+	strcat(payeeCustomerDirectoryPath, payeeCustomerId);
+
+	result = DOES_NOT_EXIST;
+
+	if(access(payeeCustomerDirectoryPath, F_OK) == 0) {
+		result = EXISTS;
+	}
+
+	send(socketfd, &result, sizeof(result), 0);
+
+	if(result != EXISTS) {
+		return;
+	}
+
+	strcpy(currCustomerDirectoryPath, customersDirectoryPath);
+	strcat(currCustomerDirectoryPath, "/");
+	strcat(currCustomerDirectoryPath, currentCustomerId);
+
+	strcpy(currCustomerDetailsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerDetailsFilePath, "/details");
+
+	strcpy(currCustomerTransationsFilePath, currCustomerDirectoryPath);
+	strcat(currCustomerTransationsFilePath, "/transactions");
+
+	read(socketfd, &transferAmount, sizeof(transferAmount));
+
+	int fd1 = open(currCustomerDetailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd1);
+
+	read(fd1, &customer, sizeof(CustomerInformation));
+
+	send(socketfd, &customer.balance, sizeof(double), 0);
+
+	if(customer.balance < transferAmount) {
+		UnLockFile(fd1);
+		close(fd1);
+		return;
+	}
+
+	customer.balance -= transferAmount;
+
+	lseek(fd1, 0, SEEK_SET);
+
+	write(fd1, &customer, sizeof(CustomerInformation));
+
+	UnLockFile(fd1);
+	close(fd1);
+
+	strcpy(payeeCustomerDirectoryPath, customersDirectoryPath);
+	strcat(payeeCustomerDirectoryPath, "/");
+	strcat(payeeCustomerDirectoryPath, payeeCustomerId);
+
+	strcpy(payeeCustomerDetailsFilePath, payeeCustomerDirectoryPath);
+	strcat(payeeCustomerDetailsFilePath, "/details");
+
+	strcpy(payeeCustomerTransactionsFilePath, payeeCustomerDirectoryPath);
+	strcat(payeeCustomerTransactionsFilePath, "/transactions");
+
+	int fd2 = open(payeeCustomerDetailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd2);
+
+	read(fd2, &payee, sizeof(CustomerInformation));
+
+	payee.balance += transferAmount;
+
+	lseek(fd2, 0, SEEK_SET);
+
+	write(fd2, &payee, sizeof(CustomerInformation));
+
+	UnLockFile(fd2);
+	
+	close(fd2);
+
+	LogTransaction(currCustomerTransationsFilePath, payeeCustomerId, transferAmount, DEBIT);
+	LogTransaction(payeeCustomerTransactionsFilePath, currentCustomerId, transferAmount, CREDIT);
+}
+
+void LogTransaction(char * filePath, char * customerId, double amount, TransactionType type) {
+	Transaction transaction;
+	long currentTime;
+	
+	time(&currentTime);
+	char * tempString = ctime(&currentTime);
+
+	transaction.transferamount = amount;
+	strcpy(transaction.secondparty, customerId);
+	strcpy(transaction.time, tempString);
+	transaction.type = type;
+	
+	int fd = open(filePath, O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+
+	AcquireWriteLock(fd);
+
+	write(fd, &transaction, sizeof(Transaction));
+
+	UnLockFile(fd);
+	close(fd);
+}
+
+void ChangePasswordForClient(int socketfd) {
+	ClientType clientType;
+	char detailsFilePath[237];
+	char clientId[14];
+	char newPassword[14];
+
+	read(socketfd, &clientType, sizeof(ClientType));
+
+	read(socketfd, clientId, 14);
+
+	read(socketfd, newPassword, 14);
+
+	if(clientType == ADMIN) {
+		strcpy(detailsFilePath, adminCredentialsFilePath);
+
+		Credentials creds;
+
+		int fd = open(detailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+		AcquireWriteLock(fd);
+
+		read(fd, &creds, sizeof(Credentials));
+
+		lseek(fd, 0, SEEK_SET);
+
+		strcpy(creds.password, newPassword);
+
+		write(fd, &creds, sizeof(Credentials));
+
+		UnLockFile(fd);
+
+		close(fd);
+
+		return;
+	}
+
+	if(clientType == CUSTOMER) {
+		strcpy(detailsFilePath, customersDirectoryPath);
+		strcat(detailsFilePath, "/");
+		strcat(detailsFilePath, clientId);
+		strcat(detailsFilePath, "/");
+		strcat(detailsFilePath, "details");
+
+		int fd = open(detailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+		AcquireWriteLock(fd);
+
+		CustomerInformation customer;
+
+		read(fd, &customer, sizeof(CustomerInformation));
+
+		lseek(fd, 0, SEEK_SET);
+
+		strcpy(customer.password, newPassword);
+
+		write(fd, &customer, sizeof(customer));
+
+		UnLockFile(fd);
+
+		close(fd);
+	}
+	else if(clientType == MANAGER || clientType == EMPLOYEE) {
+		strcpy(detailsFilePath, employeesDirectoryPath);
+
+		strcat(detailsFilePath, "/");
+		strcat(detailsFilePath, clientId);
+		strcat(detailsFilePath, "/");
+		strcat(detailsFilePath, "details");
+
+		int fd = open(detailsFilePath, O_RDWR, S_IRUSR | S_IWUSR);
+
+		AcquireWriteLock(fd);
+
+		EmployeeInformation employee;
+
+		read(fd, &employee, sizeof(EmployeeInformation));
+
+		lseek(fd, 0, SEEK_SET);
+
+		strcpy(employee.password, newPassword);
+
+		write(fd, &employee, sizeof(employee));
+
+		UnLockFile(fd);
+
+		close(fd);		
+	}
+}
+
