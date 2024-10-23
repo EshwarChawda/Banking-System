@@ -25,6 +25,11 @@ void WithdrawMoney(int socketfd);
 void ViewTransactionHistory(int socketfd);
 void TransferFunds(int socketfd);
 void ChangePassword(int socketfd, ClientType clientType);
+void ChangeCustomerDetails(int socketfd);
+void ChangeEmployeeDetails(int socketfd);
+void ViewCustomerTransactions(int socketfd);
+void AddFeedback(int socketfd);
+void ViewFeedbacks(int socketfd);
 
 int main() {
     int sock = 0;
@@ -150,8 +155,18 @@ void SendAdminMenuResponse(int socketfd) {
 		SendAdminMenuResponse(socketfd);
 		break;
 	
+	case 2:
+		ChangeCustomerDetails(socketfd);
+		SendAdminMenuResponse(socketfd);
+		break;
+	
+	case 3:
+		ChangeEmployeeDetails(socketfd);
+		SendAdminMenuResponse(socketfd);
+		break;
+	
 	case 4:
-		ChangePassword(socketfd, MANAGER);
+		ChangePassword(socketfd, ADMIN);
 		SendAdminMenuResponse(socketfd);
 		break;
 
@@ -167,24 +182,20 @@ void AddNewEmployee(int socketfd) {
 	employee.status = ACTIVE;
 	
 	printf("\nEnter Full Name : ");
-	strcpy(employee.personalinformation.fullname, "Full Name\n");
-	printf("%s", employee.personalinformation.fullname);
-	//fgets(employee.personalinformation.fullname, sizeof(employee.personalinformation.fullname), stdin);
+	fgets(employee.personalinformation.fullname, 25, stdin);
+	employee.personalinformation.fullname[strcspn(employee.personalinformation.fullname, "\n")] = '\0';
 
 	printf("\nEnter contact : ");
-	strcpy(employee.personalinformation.contact, "9999999999\n");
-	printf("%s", employee.personalinformation.contact);
-	//fgets(employee.personalinformation.contact, sizeof(employee.personalinformation.contact), stdin);
+	fgets(employee.personalinformation.contact, 15, stdin);
+	employee.personalinformation.contact[strcspn(employee.personalinformation.contact, "\n")] = '\0';
 
 	printf("\nEnter Email : ");
-	strcpy(employee.personalinformation.email, "some-email@gmail.com\n");
-	printf("%s", employee.personalinformation.email);
-	//fgets(employee.personalinformation.email, sizeof(employee.personalinformation.email), stdin);
+	fgets(employee.personalinformation.email, 50, stdin);
+	employee.personalinformation.email[strcspn(employee.personalinformation.email, "\n")] = '\0';
 
 	printf("\nEnter Password : ");
-	strcpy(employee.password, "password");
-	printf("%s", employee.password);
-	//fgets(employee.password, sizeof(employee.password), stdin);
+	fgets(employee.password, 14, stdin);
+	employee.password[strcspn(employee.password, "\n")] = '\0';
 
 	char employeetype;
 
@@ -200,8 +211,7 @@ void AddNewEmployee(int socketfd) {
 
 	send(socketfd, &employee, sizeof(EmployeeInformation), 0);
 
-	int bytesread = read(socketfd, employee.userid, 14);
-	employee.userid[bytesread] = '\0';
+	read(socketfd, employee.userid, 14);
 
 	printf("\nEmployee Id of the new Employee is : %s\n", employee.userid);
 }
@@ -221,6 +231,11 @@ void SendManagerMenuResponse(int socketfd) {
 	switch (val)
 	{
 		case 1: 
+			break;
+
+		case 4:
+			ViewFeedbacks(socketfd);
+			SendManagerMenuResponse(socketfd);
 			break;
 
 		case 5:
@@ -253,7 +268,17 @@ void SendEmployeeMenuResponse(int socketfd) {
 			SendEmployeeMenuResponse(socketfd);
 			break;
 		
+		case 2:
+			ChangeCustomerDetails(socketfd);
+			SendEmployeeMenuResponse(socketfd);
+			break;
+		
 		case 5:
+			ViewCustomerTransactions(socketfd);
+			SendEmployeeMenuResponse(socketfd);
+			break;
+		
+		case 6:
 			ChangePassword(socketfd, EMPLOYEE);
 			SendEmployeeMenuResponse(socketfd);
 			break;
@@ -271,31 +296,26 @@ void AddNewCustomer(int socketfd) {
 	customer.balance = 0.0;
 	
 	printf("\nEnter Full Name : ");
-	strcpy(customer.personalinformation.fullname, "Full Name\n");
-	printf("%s", customer.personalinformation.fullname);
-	//fgets(employee.personalinformation.fullname, sizeof(employee.personalinformation.fullname), stdin);
+	fgets(customer.personalinformation.fullname, 25, stdin);
+	customer.personalinformation.fullname[strcspn(customer.personalinformation.fullname, "\n")] = '\0';
 
 	printf("\nEnter contact : ");
-	strcpy(customer.personalinformation.contact, "9999999999\n");
-	printf("%s", customer.personalinformation.contact);
-	//fgets(employee.personalinformation.contact, sizeof(employee.personalinformation.contact), stdin);
+	fgets(customer.personalinformation.contact, 15, stdin);
+	customer.personalinformation.contact[strcspn(customer.personalinformation.contact, "\n")] = '\0';
 
 	printf("\nEnter Email : ");
-	strcpy(customer.personalinformation.email, "some-email@gmail.com\n");
-	printf("%s", customer.personalinformation.email);
-	//fgets(employee.personalinformation.email, sizeof(employee.personalinformation.email), stdin);
+	fgets(customer.personalinformation.email, 50, stdin);
+	customer.personalinformation.email[strcspn(customer.personalinformation.email, "\n")] = '\0';
 
 	printf("\nEnter Password : ");
-	strcpy(customer.password, "password");
-	printf("%s", customer.password);
-	//fgets(employee.password, sizeof(employee.password), stdin);
+	fgets(customer.password, 14, stdin);
+	customer.password[strcspn(customer.password, "\n")] = '\0';
 
 	send(socketfd, &customer, sizeof(CustomerInformation), 0);
 
-	int bytesRead = read(socketfd, customer.userid, 13);
-	customer.userid[bytesRead] = '\0';
+	read(socketfd, customer.userid, 14);
 
-	printf("\nEmployee Id of the new Employee is : %s\n", customer.userid);
+	printf("\nCustomer Id of the new Customer is : %s\n", customer.userid);
 }
 
 void SendCustomerMenuResponse(int socketfd) {
@@ -334,6 +354,11 @@ void SendCustomerMenuResponse(int socketfd) {
 
 		case 5:
 			ChangePassword(socketfd, CUSTOMER);
+			SendCustomerMenuResponse(socketfd);
+			break;
+		
+		case 6:
+			AddFeedback(socketfd);
 			SendCustomerMenuResponse(socketfd);
 			break;
 		
@@ -430,7 +455,7 @@ void TransferFunds(int socketfd) {
 	double transferAmount;
 	double balance;
 	char payeeId[14];
-	EnityExistenceResult result;
+	EntityExistenceResult result;
 
 	printf("\nEnter Payee Id : ");
 	fgets(payeeId, BUFFER_SIZE, stdin);
@@ -477,4 +502,161 @@ void ChangePassword(int socketfd, ClientType clientType) {
 	send(socketfd, newPassword, 14, 0);
 
 	printf("\nPassword updated Successfully.");
+}
+
+void ChangeCustomerDetails(int socketfd) {
+	CustomerInformation customer;
+	char customerId[14];
+	EntityExistenceResult result;
+
+	printf("\nEnter Customer Id : ");
+	fgets(customerId, 14, stdin);
+	customerId[strcspn(customerId, "\n")] = '\0';
+
+	send(socketfd, customerId, BUFFER_SIZE, 0);
+
+	read(socketfd, &result, sizeof(EntityExistenceResult));
+
+	if(result != EXISTS) {
+		printf("\nNo such Customer Exists. Try Again\n");
+		return;
+	}
+
+	printf("\nEnter Customer Name : ");
+	fgets(customer.personalinformation.fullname, 25, stdin);
+
+	printf("\nEnter Customer Email : ");
+	fgets(customer.personalinformation.email, 50, stdin);
+
+	printf("\nEnter Customer Contact : ");
+	fgets(customer.personalinformation.contact, 15, stdin);
+
+	printf("\nEnter Customer Password : ");
+	fgets(customer.password, 14, stdin);
+	customer.password[strcspn(customer.password, "\n")] = '\0';
+
+	send(socketfd, &customer, sizeof(CustomerInformation), 0);
+
+	printf("\nCustomer Details Updated Successfully");
+}
+
+void ChangeEmployeeDetails(int socketfd) {
+	EmployeeInformation employee;
+	char employeeId[14];
+	EntityExistenceResult result;
+
+	printf("\nEnter Employee Id : ");
+	fgets(employeeId, 14, stdin);
+	employeeId[strcspn(employeeId, "\n")] = '\0';
+
+	send(socketfd, employeeId, BUFFER_SIZE, 0);
+
+	read(socketfd, &result, sizeof(EntityExistenceResult));
+
+	if(result != EXISTS) {
+		printf("\nNo such Employee Exists. Try Again\n");
+		return;
+	}
+
+	printf("\nEnter Employee Name : ");
+	fgets(employee.personalinformation.fullname, 25, stdin);
+
+	printf("\nEnter Employee Email : ");
+	fgets(employee.personalinformation.email, 50, stdin);
+
+	printf("\nEnter Employee Contact : ");
+	fgets(employee.personalinformation.contact, 15, stdin);
+
+	printf("\nEnter Employee Password : ");
+	fgets(employee.password, 14, stdin);
+	employee.password[strcspn(employee.password, "\n")] = '\0';
+
+	char type;
+	printf("\nEnter (y) if the employee is manager, else type (n): ");
+	scanf("%c", &type);
+	getchar();
+
+	if(type == 'y')
+		employee.employeetype = MANAGER;
+	else
+		employee.employeetype = EMPLOYEE;
+
+	send(socketfd, &employee, sizeof(EmployeeInformation), 0);
+
+	printf("\nEmployee Details Updated Successfully");
+}
+
+void ViewCustomerTransactions(int socketfd) {
+	char customerId[14];
+	int totalTransactions;
+	EntityExistenceResult result;
+
+	printf("\nEnter Customer Id : ");
+	fgets(customerId, 14, stdin);
+	customerId[strcspn(customerId, "\n")] = '\0';
+	
+	send(socketfd, customerId, BUFFER_SIZE, 0);
+
+	read(socketfd, &result, sizeof(EntityExistenceResult));
+
+	if(result != EXISTS) {
+		printf("\nNo such Customer Exists. Try Again\n");
+		return;
+	}
+
+	read(socketfd, &totalTransactions, sizeof(totalTransactions));
+
+	printf("\n######################################\n");
+	printf("\nTotal Transactions : %d\n", totalTransactions);
+
+	for(int i = 0; i < totalTransactions; i++) {
+		Transaction transaction;
+		read(socketfd, &transaction, sizeof(Transaction));
+		printf("\n*********************************");
+		printf("\nTransaction Amount : %lf", transaction.transferamount);
+		printf("\nTo/From : %s", transaction.secondparty);
+		printf("\nTransaction Time : %s", transaction.time);
+		if(transaction.type == CREDIT)
+			printf("Transaction Type : CREDIT\n");
+		else
+			printf("Transaction Type : DEBIT\n");
+		
+		printf("*********************************");
+	}
+
+	printf("\n######################################\n");
+}
+
+void AddFeedback(int socketfd) {
+	Feedback feedback;
+
+	strcpy(feedback.clientId, buffer);
+
+	printf("\nEnter Feedback : ");
+	fgets(feedback.feedback, 255, stdin);
+	feedback.feedback[strcspn(feedback.feedback, "\n")] = '\0';
+
+	send(socketfd, &feedback, sizeof(Feedback), 0);
+
+	printf("\nFeedback added successfully.\n");
+}
+
+void ViewFeedbacks(int socketfd) {
+	int totalFeedbacks;
+
+	read(socketfd, &totalFeedbacks, sizeof(totalFeedbacks));
+
+	printf("\n######################################\n");
+	printf("\nTotal Feedbacks : %d\n", totalFeedbacks);
+	printf("\n*********************************");
+
+	Feedback feedback;
+
+	for(int i = 0; i < totalFeedbacks; i++) {
+		read(socketfd, &feedback, sizeof(Feedback));
+		printf("\n%s Says : %s", feedback.clientId, feedback.feedback);
+		printf("\n*********************************");
+	}
+
+	printf("\n######################################\n");
 }

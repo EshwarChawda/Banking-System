@@ -13,6 +13,7 @@ extern char adminCredentialsFilePath[212];
 extern char customerIndexesFilePath[216];
 extern char employeeIndexesFilePath[216];
 extern char allLoansPath[208];
+extern char feedbacksFilePath[210];
 
 extern char dataDirectoryPath[200];
 extern char employeesDirectoryPath[210];
@@ -40,7 +41,7 @@ typedef enum {
 typedef enum {
 	EXISTS,
 	DOES_NOT_EXIST
-} EnityExistenceResult;
+} EntityExistenceResult;
 
 typedef enum {
 	CREDIT,
@@ -55,13 +56,13 @@ typedef struct {
 typedef struct {
 	char fullname[25];
 	char email[50];
-	char contact[11];
+	char contact[15];
 } PersonalInformation;
 
 typedef struct {
 	PersonalInformation personalinformation;
 	char userid[14];
-	char password[20];
+	char password[14];
 	ClientType employeetype;
 	Status status;
 } EmployeeInformation;
@@ -70,7 +71,7 @@ typedef struct {
 	PersonalInformation personalinformation;
 	double balance;
 	char userid[14];
-	char password[20];
+	char password[14];
 	Status status;
 } CustomerInformation;
 
@@ -81,11 +82,17 @@ typedef struct {
 	TransactionType type;
 } Transaction;
 
+typedef struct {
+	char clientId[14];
+	char feedback[256];
+} Feedback;
+
 void init();
 void AcquireWriteLock(int fd);
 void AcquireReadLock(int fd);
 void UnLockFile(int fd);
 
 void PrintEmployeeInformation(EmployeeInformation * employee);
+void PrintCustomerInformation(CustomerInformation * customer);
 
 #endif 
