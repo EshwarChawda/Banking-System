@@ -812,6 +812,7 @@ void ViewLoanApplications(int socketfd) {
 		printf("\nLoan Duration : %d", loan.duration);
 		printf("\nInterest Rate : %f", loan.interest);
 		printf("\nCustomer Id : %s", loan.customerId);
+		printf("\nApplication Date : %s", loan.applicationDate);
 		printf("\nLoan Status : %s", loan.result == APPROVED ? "Approved" : "Rejected");
 		printf("\n*********************************");
 	}
